@@ -51,7 +51,7 @@ IGNORE_OBJ_STATE = 2
 NOT_SEEN_INIT = 33
 
 def _create_radar_parser():
-  return CANParser('u_radar', [("Status", float('nan')), ("ObjectData", float('nan'))], 1)
+  return CANParser('u_radar', [("Status", float('nan')), ("ObjectData", float('nan'))], 2)
 
 class RadarInterface(RadarInterfaceBase):
   def __init__(self, CP):
