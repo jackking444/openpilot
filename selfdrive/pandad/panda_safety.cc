@@ -65,16 +65,16 @@ void PandaSafety::setSafetyMode(const std::string &params_string) {
   auto safety_configs = car_params.getSafetyConfigs();
   uint16_t alternative_experience = car_params.getAlternativeExperience();
 
-  for (int i = 0; i < pandas_.size(); ++i) {
+  for (size_t i = 0; i < pandas_.size(); ++i) {
     // Default to SILENT safety model if not specified
     cereal::CarParams::SafetyModel safety_model = cereal::CarParams::SafetyModel::SILENT;
     uint16_t safety_param = 0U;
     if (i < safety_configs.size()) {
       safety_model = safety_configs[i].getSafetyModel();
-      safety_param = safety_configs[i].getSafetyParam();
+      safety_param = safety_configs[i].getSafetyParam();  // passed to panda (e.g. FLAG_VW_GAS_INTERCEPTOR)
     }
 
-    LOGW("Panda %d: setting safety model: %d, param: %d, alternative experience: %d", i, (int)safety_model, safety_param, alternative_experience);
+    LOGW("Panda %zu: safety model %d, safetyParam %u (passed to panda), alternative experience %u", i, (int)safety_model, safety_param, alternative_experience);
     pandas_[i]->set_alternative_experience(alternative_experience);
     pandas_[i]->set_safety_model(safety_model, safety_param);
   }

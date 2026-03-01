@@ -21,8 +21,7 @@ class CarInterface(CarInterfaceBase):
       safety_configs = [get_safety_config(structs.CarParams.SafetyModel.volkswagenPq)]
       ret.enableGasInterceptorDEPRECATED = 0x201 in fingerprint[0] and ret.openpilotLongitudinalControl
       if ret.enableGasInterceptorDEPRECATED:
-       #ret.flags |= VolkswagenFlags.FLAG_VW_GAS_INTERCEPTOR.value
-       safety_configs[0].safetyParam |= VolkswagenSafetyFlags.FLAG_VW_GAS_INTERCEPTOR.value
+        safety_configs[0].safetyParam |= VolkswagenSafetyFlags.FLAG_VW_GAS_INTERCEPTOR.value
       ret.enableBsm = 0x3BA in fingerprint[0]  # SWA_1
 
       if 0x440 in fingerprint[0] or docs:  # Getriebe_1

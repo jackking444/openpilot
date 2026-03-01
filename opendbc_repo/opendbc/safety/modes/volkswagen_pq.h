@@ -78,7 +78,7 @@ static safety_config volkswagen_pq_init(uint16_t param) {
     {.msg = {{MSG_MOTOR_3, 0, 8, 100U, .ignore_checksum = true, .ignore_counter = true, .ignore_quality_flag = true}, { 0 }, { 0 }}},
     {.msg = {{MSG_MOTOR_5, 0, 8, 50U, .ignore_counter = true, .ignore_quality_flag = true}, { 0 }, { 0 }}},
     {.msg = {{MSG_GRA_NEU, 0, 4, 30U, .max_counter = 15U, .ignore_quality_flag = true}, { 0 }, { 0 }}},
-    {.msg = {{MSG_GAS_SENSOR, 0, 6, .ignore_checksum = false, .max_counter = 15U, .frequency = 50U}, { 0 }, { 0 }}},
+    {.msg = {{MSG_GAS_SENSOR, 0, 6, .ignore_checksum = false, .max_counter = 15U, .frequency = 50U, .ignore_quality_flag = true}, { 0 }, { 0 }}},
   };
   volkswagen_common_init();
 
