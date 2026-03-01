@@ -3,6 +3,10 @@
 #include "opendbc/safety/declarations.h"
 #include "opendbc/safety/modes/volkswagen_common.h"
 
+// Declared in safety.h after mode includes; needed for gas interceptor and ALLOW_DEBUG init
+extern bool enable_gas_interceptor;
+extern bool gas_interceptor_prev;
+
 #define MSG_LENKHILFE_3         0x0D0U   // RX from EPS, for steering angle and driver steering torque
 #define MSG_HCA_1               0x0D2U   // TX by OP, Heading Control Assist steering torque
 #define MSG_BREMSE_1            0x1A0U   // RX from ABS, for ego speed
@@ -17,7 +21,7 @@
 #define MSG_GAS_SENSOR		      0x201   // RX by OP, GAS Sensor
 
 const int VOLKSWAGEN_GAS_INTERCEPTOR_THRSLD = 475;
-#define VOLKSWAGEN_GET_INTERCEPTOR(msg) (((GET_BYTE((msg), 0) << 8) + GET_BYTE((msg), 1) + (GET_BYTE((msg), 2) << 8) + GET_BYTE((msg), 3)) / 2U) // avg between 2 tracks
+#define VOLKSWAGEN_GET_INTERCEPTOR(msg) ((((uint32_t)(GET_BYTES((msg), 0, 1) & 0xFFU) << 8) + (GET_BYTES((msg), 1, 1) & 0xFFU) + ((GET_BYTES((msg), 2, 1) & 0xFFU) << 8) + (GET_BYTES((msg), 3, 1) & 0xFFU)) / 2U) // avg between 2 tracks
 
 static uint32_t volkswagen_pq_get_checksum(const CANPacket_t *msg) {
   return (uint32_t)msg->data[(msg->addr == MSG_MOTOR_5) ? 7 : 0];
@@ -31,11 +35,15 @@ static uint8_t volkswagen_pq_get_counter(const CANPacket_t *msg) {
   } else if (msg->addr == MSG_GRA_NEU) {
     counter = (uint8_t)(msg->data[2] & 0xF0U) >> 4;
   } else if (msg->addr == MSG_GAS_SENSOR) {
-    counter = GET_BYTE(to_push, 4) & 0x0FU;
+    counter = (uint8_t)(GET_BYTES(msg, 4, 1) & 0x0FU);
   } else {
   }
 
   return counter;
+}
+
+static bool longitudinal_interceptor_checks(const CANPacket_t *to_send) {
+  return !get_longitudinal_allowed() && ((GET_BYTES(to_send, 0, 1) & 0xFFU) || (GET_BYTES(to_send, 1, 1) & 0xFFU));
 }
 
 static uint32_t volkswagen_pq_compute_checksum(const CANPacket_t *msg) {
@@ -72,9 +80,6 @@ static safety_config volkswagen_pq_init(uint16_t param) {
     {.msg = {{MSG_GRA_NEU, 0, 4, 30U, .max_counter = 15U, .ignore_quality_flag = true}, { 0 }, { 0 }}},
     {.msg = {{MSG_GAS_SENSOR, 0, 6, .ignore_checksum = false, .max_counter = 15U, .frequency = 50U}, { 0 }, { 0 }}},
   };
-  bool longitudinal_interceptor_checks(const CANPacket_t *to_send) {
-    return !get_longitudinal_allowed() && (GET_BYTE(to_send, 0) || GET_BYTE(to_send, 1));
-  }
   volkswagen_common_init();
 
 #ifdef ALLOW_DEBUG
@@ -148,16 +153,16 @@ static void volkswagen_pq_rx_hook(const CANPacket_t *msg) {
         pcm_cruise_check(cruise_engaged);
       }
     }
-    if (((addr == MSG_GAS_SENSOR) && enable_gas_interceptor)) {
+    if (((msg->addr == MSG_GAS_SENSOR) && enable_gas_interceptor)) {
       //enable_gas_interceptor = true;
-      int gas_interceptor = VOLKSWAGEN_GET_INTERCEPTOR(to_push);
+      int gas_interceptor = VOLKSWAGEN_GET_INTERCEPTOR(msg);
       gas_pressed = gas_interceptor > VOLKSWAGEN_GAS_INTERCEPTOR_THRSLD;
       gas_interceptor_prev = gas_interceptor;
     }
 
     // Signal: Motor_3.MO3_Pedalwert
     //if (msg->addr == MSG_MOTOR_3) {
-    if ((addr == MSG_MOTOR_3)&& !enable_gas_interceptor) {
+    if ((msg->addr == MSG_MOTOR_3) && !enable_gas_interceptor) {
       gas_pressed = (msg->data[2]);
     }
 
@@ -220,8 +225,8 @@ static bool volkswagen_pq_tx_hook(const CANPacket_t *msg) {
     }
   }
   // GAS: safety check (interceptor)
-  if (addr == MSG_GAS_1) {
-   if (longitudinal_interceptor_checks(to_send)) {
+  if (msg->addr == MSG_GAS_1) {
+    if (longitudinal_interceptor_checks(msg)) {
      tx = false;
    }
   }
