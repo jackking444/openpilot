@@ -13,10 +13,16 @@ class CarInterface(CarInterfaceBase):
   def _get_params(ret: structs.CarParams, candidate: CAR, fingerprint, car_fw, alpha_long, is_release, dp_params, docs) -> structs.CarParams:
     ret.brand = "volkswagen"
     ret.radarUnavailable = True
+    ret.enableGasInterceptorDEPRECATED = False
+    ret.pcmCruise = not ret.enableGasInterceptorDEPRECATED
 
     if ret.flags & VolkswagenFlags.PQ:
       # Set global PQ35/PQ46/NMS parameters
       safety_configs = [get_safety_config(structs.CarParams.SafetyModel.volkswagenPq)]
+      ret.enableGasInterceptorDEPRECATED = 0x201 in fingerprint[0] and ret.openpilotLongitudinalControl
+      if ret.enableGasInterceptorDEPRECATED:
+       #ret.flags |= VolkswagenFlags.FLAG_VW_GAS_INTERCEPTOR.value
+       safety_configs[0].safetyParam |= VolkswagenSafetyFlags.FLAG_VW_GAS_INTERCEPTOR.value
       ret.enableBsm = 0x3BA in fingerprint[0]  # SWA_1
 
       if 0x440 in fingerprint[0] or docs:  # Getriebe_1
@@ -99,7 +105,7 @@ class CarInterface(CarInterfaceBase):
     ret.stopAccel = -0.55
     ret.vEgoStarting = 0.1
     ret.vEgoStopping = 0.5
-    ret.autoResumeSng = ret.minEnableSpeed == -1
+    ret.autoResumeSng = ret.minEnableSpeed == -1 or ret.enableGasInterceptorDEPRECATED
 
     CAN = CanBus(fingerprint=fingerprint)
     if CAN.pt >= 4:

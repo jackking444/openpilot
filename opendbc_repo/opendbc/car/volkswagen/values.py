@@ -179,6 +179,7 @@ class WMI(StrEnum):
 
 class VolkswagenSafetyFlags(IntFlag):
   LONG_CONTROL = 1
+  FLAG_VW_GAS_INTERCEPTOR=16
 
 
 class VolkswagenFlags(IntFlag):
@@ -193,6 +194,8 @@ class VolkswagenFlags(IntFlag):
   A0SnG = 2 ** 10
   PQSteeringPatch = 2 ** 11
   AVOID_EPS_LOCKOUT = 2 ** 12
+  FLAG_VW_GAS_INTERCEPTOR=16
+
 
 @dataclass
 class VolkswagenMLBPlatformConfig(PlatformConfig):

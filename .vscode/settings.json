@@ -1,10 +1,15 @@
 {
+  "git.path": "/usr/bin/git",
   "editor.tabSize": 2,
   "editor.insertSpaces": true,
   "editor.renderWhitespace": "trailing",
   "files.trimTrailingWhitespace": true,
-  "terminal.integrated.defaultProfile.linux": "dragonpilot",
+  "terminal.integrated.defaultProfile.linux": "bash",
   "terminal.integrated.profiles.linux": {
+    "bash": {
+      "path": "bash",
+      "args": []
+    },
     "dragonpilot": {
       "path": "bash",
       "args": ["-c", "distrobox enter dp"]
@@ -37,5 +42,15 @@
     "system/**",
     "third_party/**",
     "tools/**",
+  ],
+  "cursorpyright.analysis.exclude": [
+    "**/.git",
+    "**/.venv",
+    "**/__pycache__",
+    "common/**",
+    "selfdrive/**",
+    "system/**",
+    "third_party/**",
+    "tools/**"
   ]
 }

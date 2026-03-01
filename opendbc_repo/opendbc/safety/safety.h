@@ -45,6 +45,9 @@ const int MAX_WRONG_COUNTERS = 5;
 // This can be set by the safety hooks
 bool controls_allowed = false;
 bool relay_malfunction = false;
+bool gas_interceptor_detected = false;
+bool enable_gas_interceptor = false;
+bool gas_interceptor_prev = 0;
 bool gas_pressed = false;
 bool gas_pressed_prev = false;
 bool brake_pressed = false;

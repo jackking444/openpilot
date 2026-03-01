@@ -159,7 +159,14 @@ class CarState(CarStateBase):
     ret.steerFaultTemporary, ret.steerFaultPermanent = self.update_hca_state(hca_status)
 
     # Update gas, brakes, and gearshift.
-    ret.gasPressed = pt_cp.vl["Motor_3"]["MO3_Pedalwert"] > 0
+    #ret.gasPressed = pt_cp.vl["Motor_3"]["MO3_Pedalwert"] > 0
+    if not self.CP.enableGasInterceptorDEPRECATED:
+      #ret.gas = pt_cp.vl["Motor_3"]['Fahrpedal_Rohsignal'] / 100.0
+      ret.gas = pt_cp.vl["Motor_3"]["MO3_Pedalwert"]
+      ret.gasPressed = ret.gas > 0
+    else:
+      ret.gas = (pt_cp.vl["GAS_SENSOR"]['INTERCEPTOR_GAS'] + pt_cp.vl["GAS_SENSOR"]['INTERCEPTOR_GAS2']) / 1.5
+      ret.gasPressed = ret.gas > 460
     ret.brake = pt_cp.vl["Bremse_5"]["BR5_Bremsdruck"] / 250.0  # FIXME: this is pressure in Bar, not sure what OP expects
     ret.brakePressed = bool(pt_cp.vl["Motor_2"]["MO2_BLS"])
     ret.parkingBrake = bool(pt_cp.vl["Kombi_1"]["Bremsinfo"])
@@ -341,7 +348,10 @@ class CarState(CarStateBase):
 
   @staticmethod
   def get_can_parsers_pq(CP):
+    pt_messages, cam_messages = [], []
+    if CP.enableGasInterceptorDEPRECATED:
+      pt_messages += [("GAS_SENSOR", 50)]
     return {
-      Bus.pt: CANParser(DBC[CP.carFingerprint][Bus.pt], [], CanBus(CP).pt),
+      Bus.pt: CANParser(DBC[CP.carFingerprint][Bus.pt], pt_messages, CanBus(CP).pt),
       Bus.cam: CANParser(DBC[CP.carFingerprint][Bus.pt], [], CanBus(CP).cam),
     }

@@ -13,6 +13,11 @@
 #define MSG_MOTOR_5             0x480U   // RX from ECU, for ACC main switch state
 #define MSG_ACC_GRA_ANZEIGE     0x56AU   // TX by OP, ACC HUD
 #define MSG_LDW_1               0x5BEU   // TX by OP, Lane line recognition and text alerts
+#define MSG_GAS_1		            0x200   // TX by OP, Gas Control
+#define MSG_GAS_SENSOR		      0x201   // RX by OP, GAS Sensor
+
+const int VOLKSWAGEN_GAS_INTERCEPTOR_THRSLD = 475;
+#define VOLKSWAGEN_GET_INTERCEPTOR(msg) (((GET_BYTE((msg), 0) << 8) + GET_BYTE((msg), 1) + (GET_BYTE((msg), 2) << 8) + GET_BYTE((msg), 3)) / 2U) // avg between 2 tracks
 
 static uint32_t volkswagen_pq_get_checksum(const CANPacket_t *msg) {
   return (uint32_t)msg->data[(msg->addr == MSG_MOTOR_5) ? 7 : 0];
@@ -25,6 +30,8 @@ static uint8_t volkswagen_pq_get_counter(const CANPacket_t *msg) {
     counter = (uint8_t)(msg->data[1] & 0xF0U) >> 4;
   } else if (msg->addr == MSG_GRA_NEU) {
     counter = (uint8_t)(msg->data[2] & 0xF0U) >> 4;
+  } else if (msg->addr == MSG_GAS_SENSOR) {
+    counter = GET_BYTE(to_push, 4) & 0x0FU;
   } else {
   }
 
@@ -54,7 +61,7 @@ static safety_config volkswagen_pq_init(uint16_t param) {
                                                 {MSG_GRA_NEU, 0, 4, .check_relay = false}, {MSG_GRA_NEU, 2, 4, .check_relay = false}};
 
   static const CanMsg VOLKSWAGEN_PQ_LONG_TX_MSGS[] =  {{MSG_HCA_1, 0, 5, .check_relay = true}, {MSG_LDW_1, 0, 8, .check_relay = true},
-                                                {MSG_ACC_SYSTEM, 0, 8, .check_relay = true}, {MSG_ACC_GRA_ANZEIGE, 0, 8, .check_relay = true}};
+                                                {MSG_ACC_SYSTEM, 0, 8, .check_relay = true}, {MSG_ACC_GRA_ANZEIGE, 0, 8, .check_relay = true}, {MSG_GAS_1, 0, 6, .check_relay = false}};
 
   static RxCheck volkswagen_pq_rx_checks[] = {
     {.msg = {{MSG_LENKHILFE_3, 0, 6, 100U, .max_counter = 15U, .ignore_quality_flag = true}, { 0 }, { 0 }}},
@@ -63,11 +70,15 @@ static safety_config volkswagen_pq_init(uint16_t param) {
     {.msg = {{MSG_MOTOR_3, 0, 8, 100U, .ignore_checksum = true, .ignore_counter = true, .ignore_quality_flag = true}, { 0 }, { 0 }}},
     {.msg = {{MSG_MOTOR_5, 0, 8, 50U, .ignore_counter = true, .ignore_quality_flag = true}, { 0 }, { 0 }}},
     {.msg = {{MSG_GRA_NEU, 0, 4, 30U, .max_counter = 15U, .ignore_quality_flag = true}, { 0 }, { 0 }}},
+    {.msg = {{MSG_GAS_SENSOR, 0, 6, .ignore_checksum = false, .max_counter = 15U, .frequency = 50U}, { 0 }, { 0 }}},
   };
-
+  bool longitudinal_interceptor_checks(const CANPacket_t *to_send) {
+    return !get_longitudinal_allowed() && (GET_BYTE(to_send, 0) || GET_BYTE(to_send, 1));
+  }
   volkswagen_common_init();
 
 #ifdef ALLOW_DEBUG
+  enable_gas_interceptor = GET_FLAG(param, FLAG_VW_GAS_INTERCEPTOR);
   volkswagen_longitudinal = GET_FLAG(param, FLAG_VOLKSWAGEN_LONG_CONTROL);
 #else
   SAFETY_UNUSED(param);
@@ -137,9 +148,16 @@ static void volkswagen_pq_rx_hook(const CANPacket_t *msg) {
         pcm_cruise_check(cruise_engaged);
       }
     }
+    if (((addr == MSG_GAS_SENSOR) && enable_gas_interceptor)) {
+      //enable_gas_interceptor = true;
+      int gas_interceptor = VOLKSWAGEN_GET_INTERCEPTOR(to_push);
+      gas_pressed = gas_interceptor > VOLKSWAGEN_GAS_INTERCEPTOR_THRSLD;
+      gas_interceptor_prev = gas_interceptor;
+    }
 
     // Signal: Motor_3.MO3_Pedalwert
-    if (msg->addr == MSG_MOTOR_3) {
+    //if (msg->addr == MSG_MOTOR_3) {
+    if ((addr == MSG_MOTOR_3)&& !enable_gas_interceptor) {
       gas_pressed = (msg->data[2]);
     }
 
@@ -201,7 +219,12 @@ static bool volkswagen_pq_tx_hook(const CANPacket_t *msg) {
       tx = false;
     }
   }
-
+  // GAS: safety check (interceptor)
+  if (addr == MSG_GAS_1) {
+   if (longitudinal_interceptor_checks(to_send)) {
+     tx = false;
+   }
+  }
   // FORCE CANCEL: ensuring that only the cancel button press is sent when controls are off.
   // This avoids unintended engagements while still allowing resume spam
   if ((msg->addr == MSG_GRA_NEU) && !controls_allowed) {
