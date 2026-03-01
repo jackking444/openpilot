@@ -162,11 +162,9 @@ class CarState(CarStateBase):
     #ret.gasPressed = pt_cp.vl["Motor_3"]["MO3_Pedalwert"] > 0
     if not self.CP.enableGasInterceptorDEPRECATED:
       #ret.gas = pt_cp.vl["Motor_3"]['Fahrpedal_Rohsignal'] / 100.0
-      ret.gas = pt_cp.vl["Motor_3"]["MO3_Pedalwert"]
-      ret.gasPressed = ret.gas > 0
+      ret.gasPressed = pt_cp.vl["Motor_3"]["MO3_Pedalwert"] > 0
     else:
-      ret.gas = (pt_cp.vl["GAS_SENSOR"]['INTERCEPTOR_GAS'] + pt_cp.vl["GAS_SENSOR"]['INTERCEPTOR_GAS2']) / 1.5
-      ret.gasPressed = ret.gas > 460
+      ret.gasPressed = (pt_cp.vl["GAS_SENSOR"]['INTERCEPTOR_GAS'] + pt_cp.vl["GAS_SENSOR"]['INTERCEPTOR_GAS2']) / 1.5 > 460
     ret.brake = pt_cp.vl["Bremse_5"]["BR5_Bremsdruck"] / 250.0  # FIXME: this is pressure in Bar, not sure what OP expects
     ret.brakePressed = bool(pt_cp.vl["Motor_2"]["MO2_BLS"])
     ret.parkingBrake = bool(pt_cp.vl["Kombi_1"]["Bremsinfo"])
