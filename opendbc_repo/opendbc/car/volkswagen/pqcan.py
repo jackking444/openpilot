@@ -127,12 +127,13 @@ def create_pedal_control(packer, bus, apply_gas, idx):
   }
 
   if enable:
-    if (apply_gas < 430):
+    if apply_gas < 430:
       apply_gas = 430
     values["GAS_COMMAND"] = apply_gas
-    values["GAS_COMMAND2"] = apply_gas//2
+    values["GAS_COMMAND2"] = apply_gas // 2
 
-  dat = packer.make_can_msg("GAS_COMMAND", bus, values)[2]
+  # CANPacker.make_can_msg returns (addr, dat_bytes, bus)
+  dat = packer.make_can_msg("GAS_COMMAND", bus, values)[1]
 
   checksum = crc8_pedal(dat[:-1])
   values["CHECKSUM_PEDAL"] = checksum
