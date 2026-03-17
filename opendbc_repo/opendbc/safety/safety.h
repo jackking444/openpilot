@@ -47,7 +47,7 @@ bool controls_allowed = false;
 bool relay_malfunction = false;
 bool gas_interceptor_detected = false;
 bool enable_gas_interceptor = false;
-bool gas_interceptor_prev = 0;
+int  gas_interceptor_prev = 0;
 bool gas_pressed = false;
 bool gas_pressed_prev = false;
 bool brake_pressed = false;
@@ -494,6 +494,9 @@ int set_safety_hooks(uint16_t mode, uint16_t param) {
   ts_steer_req_mismatch_last = 0;
   valid_steer_req_count = 0;
   invalid_steer_req_count = 0;
+
+  enable_gas_interceptor = false;
+  gas_interceptor_prev = 0;
 
   // dp - alka
   alka_allowed = false;

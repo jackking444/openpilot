@@ -5,7 +5,7 @@
 
 // Declared in safety.h after mode includes; needed for gas interceptor and ALLOW_DEBUG init
 extern bool enable_gas_interceptor;
-extern bool gas_interceptor_prev;
+extern int gas_interceptor_prev;
 
 #define MSG_LENKHILFE_3         0x0D0U   // RX from EPS, for steering angle and driver steering torque
 #define MSG_HCA_1               0x0D2U   // TX by OP, Heading Control Assist steering torque
@@ -21,8 +21,14 @@ extern bool gas_interceptor_prev;
 #define MSG_GAS_SENSOR		      0x201   // RX by OP, GAS Sensor
 
 const int VOLKSWAGEN_GAS_INTERCEPTOR_THRSLD = 475;
-#define VOLKSWAGEN_GET_INTERCEPTOR(msg) ((((uint32_t)(GET_BYTES((msg), 0, 1) & 0xFFU) << 8) + (GET_BYTES((msg), 1, 1) & 0xFFU) + ((GET_BYTES((msg), 2, 1) & 0xFFU) << 8) + (GET_BYTES((msg), 3, 1) & 0xFFU)) / 2U) // avg between 2 tracks
+//define VOLKSWAGEN_GET_INTERCEPTOR(msg) ((((uint32_t)(GET_BYTES((msg), 0, 1) & 0xFFU) << 8) + (GET_BYTES((msg), 1, 1) & 0xFFU) + ((GET_BYTES((msg), 2, 1) & 0xFFU) << 8) + (GET_BYTES((msg), 3, 1) & 0xFFU)) / 2U) // avg between 2 tracks
+static int VOLKSWAGEN_GET_INTERCEPTOR(const CANPacket_t *msg) {
+  uint16_t val1 = (uint16_t)((uint16_t)msg->data[0] << 8U) | (uint16_t)msg->data[1];
+  uint16_t val2 = (uint16_t)((uint16_t)msg->data[2] << 8U) | (uint16_t)msg->data[3];
+  uint16_t avg  = (uint16_t)((val1 + val2) / 2U);
 
+  return (int)avg;
+}
 static uint32_t volkswagen_pq_get_checksum(const CANPacket_t *msg) {
   return (uint32_t)msg->data[(msg->addr == MSG_MOTOR_5) ? 7 : 0];
 }
@@ -42,8 +48,8 @@ static uint8_t volkswagen_pq_get_counter(const CANPacket_t *msg) {
   return counter;
 }
 
-static bool longitudinal_interceptor_checks(const CANPacket_t *to_send) {
-  return !get_longitudinal_allowed() && ((GET_BYTES(to_send, 0, 1) & 0xFFU) || (GET_BYTES(to_send, 1, 1) & 0xFFU));
+static bool longitudinal_interceptor_checks(const CANPacket_t *msg) {
+  return !get_longitudinal_allowed() && (msg->data[0] || msg->data[1] );
 }
 
 static uint32_t volkswagen_pq_compute_checksum(const CANPacket_t *msg) {
@@ -78,7 +84,7 @@ static safety_config volkswagen_pq_init(uint16_t param) {
     {.msg = {{MSG_MOTOR_3, 0, 8, 100U, .ignore_checksum = true, .ignore_counter = true, .ignore_quality_flag = true}, { 0 }, { 0 }}},
     {.msg = {{MSG_MOTOR_5, 0, 8, 50U, .ignore_counter = true, .ignore_quality_flag = true}, { 0 }, { 0 }}},
     {.msg = {{MSG_GRA_NEU, 0, 4, 30U, .max_counter = 15U, .ignore_quality_flag = true}, { 0 }, { 0 }}},
-    {.msg = {{MSG_GAS_SENSOR, 0, 6, .ignore_checksum = true, .max_counter = 15U, .frequency = 50U, .ignore_quality_flag = true}, { 0 }, { 0 }}},
+    {.msg = {{MSG_GAS_SENSOR, 0, 6, 50U, .ignore_checksum = true, .ignore_counter = true, .ignore_quality_flag = true}, { 0 }, { 0 }}},
   };
   volkswagen_common_init();
 

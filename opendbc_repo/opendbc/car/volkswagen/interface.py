@@ -19,9 +19,7 @@ class CarInterface(CarInterfaceBase):
     if ret.flags & VolkswagenFlags.PQ:
       # Set global PQ35/PQ46/NMS parameters
       safety_configs = [get_safety_config(structs.CarParams.SafetyModel.volkswagenPq)]
-      ret.enableGasInterceptorDEPRECATED = 0x201 in fingerprint[0] and ret.openpilotLongitudinalControl
-      if ret.enableGasInterceptorDEPRECATED:
-        safety_configs[0].safetyParam |= VolkswagenSafetyFlags.FLAG_VW_GAS_INTERCEPTOR.value
+
       ret.enableBsm = 0x3BA in fingerprint[0]  # SWA_1
 
       if 0x440 in fingerprint[0] or docs:  # Getriebe_1
@@ -91,6 +89,9 @@ class CarInterface(CarInterfaceBase):
     if alpha_long:
       # Proof-of-concept, prep for E2E only. No radar points available. Panda ALLOW_DEBUG firmware required.
       ret.openpilotLongitudinalControl = True
+      ret.enableGasInterceptorDEPRECATED = 0x201 in fingerprint[0] and ret.openpilotLongitudinalControl
+      if ret.enableGasInterceptorDEPRECATED:
+        safety_configs[0].safetyParam |= VolkswagenSafetyFlags.FLAG_VW_GAS_INTERCEPTOR.value
       safety_configs[0].safetyParam |= VolkswagenSafetyFlags.LONG_CONTROL.value
       if ret.transmissionType == TransmissionType.manual:
         ret.minEnableSpeed = 4.5

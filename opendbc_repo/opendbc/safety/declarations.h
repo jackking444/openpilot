@@ -261,6 +261,8 @@ extern bool controls_allowed;
 extern bool relay_malfunction;
 extern bool gas_pressed;
 extern bool gas_pressed_prev;
+extern bool enable_gas_interceptor;
+extern int gas_interceptor_prev;
 extern bool brake_pressed;
 extern bool brake_pressed_prev;
 extern bool regen_braking;
