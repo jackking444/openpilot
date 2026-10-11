@@ -376,7 +376,7 @@ class CAR(Platforms):
   )
   VOLKSWAGEN_SHARAN_MK2 = VolkswagenPQPlatformConfig(
     [
-      VWCarDocs("Volkswagen Sharan 2010, modified low-speed EPS"),
+      VWCarDocs("Volkswagen Sharan 2010"),
       VWCarDocs("Volkswagen Sharan 2018-22"),
       VWCarDocs("SEAT Alhambra 2018-20"),
     ],

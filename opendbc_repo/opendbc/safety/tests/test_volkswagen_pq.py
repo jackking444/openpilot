@@ -44,6 +44,10 @@ class TestVolkswagenPqSafetyBase(common.CarSafetyTest, common.DriverTorqueSteeri
     values = {"BR1_Rad_kmh": speed}
     return self.packer.make_can_msg_safety("Bremse_1", 0, values)
 
+  def _prime_pedal_inputs(self, speed=0):
+    self._rx(self._speed_msg(speed))
+    self._rx(self._pedal_sensor_msg(counter=1))
+
   # Brake light switch (shared message Motor_2)
   def _user_brake_msg(self, brake):
     # since this signal is used for engagement status, preserve current state
@@ -175,6 +179,7 @@ class TestVolkswagenPqLongSafety(TestVolkswagenPqSafetyBase, common.Longitudinal
     return common.make_msg(0, 0x201, 6, data)
 
   def test_pedal_tx_requires_flag_and_valid_bounded_payload(self):
+    self._prime_pedal_inputs()
     self.safety.set_controls_allowed(True)
     self.assertTrue(self._tx(self._pedal_msg(1000, 500, True)))
     self.assertFalse(self._tx(self._pedal_msg(1301, 650, True)))
@@ -188,6 +193,34 @@ class TestVolkswagenPqLongSafety(TestVolkswagenPqSafetyBase, common.Longitudinal
 
     self.safety.set_safety_hooks(CarParams.SafetyModel.volkswagenPq, VolkswagenSafetyFlags.LONG_CONTROL)
     self.safety.set_controls_allowed(True)
+    self.assertFalse(self._tx(self._pedal_msg(1000, 500, True)))
+
+  def test_pedal_tx_requires_fresh_pedal_input(self):
+    self._prime_pedal_inputs()
+    self.safety.set_controls_allowed(True)
+    self.assertTrue(self._tx(self._pedal_msg(1000, 500, True)))
+
+    self.safety.set_timer(50_000)
+    self._rx(self._speed_msg(0))
+    self.safety.set_timer(100_000)
+    self.assertFalse(self._tx(self._pedal_msg(1000, 500, True)))
+
+  def test_pedal_tx_requires_fresh_speed_input(self):
+    self._prime_pedal_inputs()
+    self.safety.set_controls_allowed(True)
+    self.assertTrue(self._tx(self._pedal_msg(1000, 500, True)))
+
+    self.safety.set_timer(50_000)
+    self._rx(self._pedal_sensor_msg(counter=2))
+    self.safety.set_timer(100_000)
+    self.assertFalse(self._tx(self._pedal_msg(1000, 500, True)))
+
+  def test_pedal_tx_is_limited_to_low_speed(self):
+    self._prime_pedal_inputs(speed=17.99)
+    self.safety.set_controls_allowed(True)
+    self.assertTrue(self._tx(self._pedal_msg(1000, 500, True)))
+
+    self._rx(self._speed_msg(18.0))
     self.assertFalse(self._tx(self._pedal_msg(1000, 500, True)))
 
   def test_pedal_rx_checksum_counter_and_fault_state(self):

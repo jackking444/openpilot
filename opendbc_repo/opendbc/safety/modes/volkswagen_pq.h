@@ -18,8 +18,17 @@ extern bool enable_gas_interceptor;
 #define MSG_GAS_COMMAND         0x200U   // TX by OP, comma pedal command
 #define MSG_GAS_SENSOR          0x201U   // RX from comma pedal
 
+#define VOLKSWAGEN_PQ_PEDAL_RX_TIMEOUT_US 100000U
+#define VOLKSWAGEN_PQ_SPEED_RX_TIMEOUT_US 100000U
+#define VOLKSWAGEN_PQ_PEDAL_MAX_SPEED 1800U  // 18.00 km/h, raw 0.01 km/h units
+
 static bool volkswagen_pq_stock_gas_pressed = false;
 static bool volkswagen_pq_interceptor_gas_pressed = false;
+static uint32_t volkswagen_pq_pedal_rx_timestamp = 0U;
+static bool volkswagen_pq_pedal_rx_seen = false;
+static uint32_t volkswagen_pq_speed_rx_timestamp = 0U;
+static bool volkswagen_pq_speed_rx_seen = false;
+static uint16_t volkswagen_pq_speed = 0U;
 
 static uint8_t volkswagen_pedal_crc8(const uint8_t *data, int len) {
   uint8_t crc = 0xFFU;
@@ -36,6 +45,15 @@ static uint16_t volkswagen_pedal_value(const CANPacket_t *msg, int offset) {
   return ((uint16_t)msg->data[offset] << 8U) | msg->data[offset + 1];
 }
 
+static bool volkswagen_pq_pedal_inputs_fresh(void) {
+  uint32_t ts = microsecond_timer_get();
+  bool pedal_fresh = volkswagen_pq_pedal_rx_seen &&
+                     (safety_get_ts_elapsed(ts, volkswagen_pq_pedal_rx_timestamp) < VOLKSWAGEN_PQ_PEDAL_RX_TIMEOUT_US);
+  bool speed_fresh = volkswagen_pq_speed_rx_seen &&
+                     (safety_get_ts_elapsed(ts, volkswagen_pq_speed_rx_timestamp) < VOLKSWAGEN_PQ_SPEED_RX_TIMEOUT_US);
+  return pedal_fresh && speed_fresh;
+}
+
 static bool volkswagen_pedal_tx_checks(const CANPacket_t *msg) {
   if (!enable_gas_interceptor || !volkswagen_longitudinal || GET_LEN(msg) != 6 ||
       msg->data[5] != volkswagen_pedal_crc8(msg->data, 5)) {
@@ -47,11 +65,12 @@ static bool volkswagen_pedal_tx_checks(const CANPacket_t *msg) {
   bool enabled = (msg->data[4] & 0x80U) != 0U;
 
   if (!enabled) {
-    return (gas == 0U) && (gas2 == 0U);
+    return (gas == 0U) && (gas2 == 0U) && ((msg->data[4] & 0x70U) == 0U);
   }
 
-  return get_longitudinal_allowed() && gas >= 430U && gas <= 1300U && gas2 == gas / 2U &&
-         (msg->data[4] & 0x70U) == 0U;
+  return get_longitudinal_allowed() && volkswagen_pq_pedal_inputs_fresh() &&
+         volkswagen_pq_speed < VOLKSWAGEN_PQ_PEDAL_MAX_SPEED &&
+         gas >= 430U && gas <= 1300U && gas2 == gas / 2U && (msg->data[4] & 0x70U) == 0U;
 }
 
 static uint32_t volkswagen_pq_get_checksum(const CANPacket_t *msg) {
@@ -98,6 +117,11 @@ static safety_config volkswagen_pq_init(uint16_t param) {
   alka_allowed = true;  // dp - ALKA enabled for VW PQ
   volkswagen_pq_stock_gas_pressed = false;
   volkswagen_pq_interceptor_gas_pressed = false;
+  volkswagen_pq_pedal_rx_timestamp = 0U;
+  volkswagen_pq_pedal_rx_seen = false;
+  volkswagen_pq_speed_rx_timestamp = 0U;
+  volkswagen_pq_speed_rx_seen = false;
+  volkswagen_pq_speed = 0U;
 
   // Transmit of GRA_Neu is allowed on bus 0 and 2 to keep compatibility with gateway and camera integration
   static const CanMsg VOLKSWAGEN_PQ_STOCK_TX_MSGS[] = {{MSG_HCA_1, 0, 5, .check_relay = true}, {MSG_LDW_1, 0, 8, .check_relay = true},
@@ -138,8 +162,10 @@ static void volkswagen_pq_rx_hook(const CANPacket_t *msg) {
     // Update in-motion state from speed value.
     // Signal: Bremse_1.BR1_Rad_kmh
     if (msg->addr == MSG_BREMSE_1) {
-      int speed = ((msg->data[2] & 0xFEU) >> 1) | (msg->data[3] << 7);
-      vehicle_moving = speed > 0;
+      volkswagen_pq_speed = (uint16_t)(((msg->data[2] & 0xFEU) >> 1) | (msg->data[3] << 7));
+      volkswagen_pq_speed_rx_timestamp = microsecond_timer_get();
+      volkswagen_pq_speed_rx_seen = true;
+      vehicle_moving = volkswagen_pq_speed > 0U;
     }
 
     // Update driver input torque samples
@@ -196,6 +222,8 @@ static void volkswagen_pq_rx_hook(const CANPacket_t *msg) {
     }
 
     if ((msg->addr == MSG_GAS_SENSOR) && enable_gas_interceptor) {
+      volkswagen_pq_pedal_rx_timestamp = microsecond_timer_get();
+      volkswagen_pq_pedal_rx_seen = true;
       uint16_t gas1 = volkswagen_pedal_value(msg, 0);
       uint16_t gas2 = volkswagen_pedal_value(msg, 2);
       volkswagen_pq_interceptor_gas_pressed = (((uint32_t)gas1 + gas2) / 2U) > 475U;
