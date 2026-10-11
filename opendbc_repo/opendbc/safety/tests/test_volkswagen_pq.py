@@ -3,6 +3,9 @@ import unittest
 
 from opendbc.car.volkswagen.values import VolkswagenSafetyFlags
 from opendbc.car.structs import CarParams
+from opendbc.car.volkswagen.pqcan import crc8_pedal
+from opendbc.car.volkswagen.pqcan import create_pedal_control
+from opendbc.can import CANParser
 from opendbc.safety.tests.libsafety import libsafety_py
 import opendbc.safety.tests.common as common
 from opendbc.safety.tests.common import CANPackerSafety
@@ -112,7 +115,7 @@ class TestVolkswagenPqSafetyBase(common.CarSafetyTest, common.DriverTorqueSteeri
 class TestVolkswagenPqStockSafety(TestVolkswagenPqSafetyBase):
   # Transmit of GRA_Neu is allowed on bus 0 and 2 to keep compatibility with gateway and camera integration
   TX_MSGS = [[MSG_HCA_1, 0], [MSG_GRA_NEU, 0], [MSG_GRA_NEU, 2], [MSG_LDW_1, 0]]
-  FWD_BLACKLISTED_ADDRS = {2: [MSG_HCA_1, MSG_LDW_1]}
+  FWD_BLACKLISTED_ADDRS = {2: [MSG_HCA_1, MSG_LDW_1, 0x200]}
 
   def setUp(self):
     self.packer = CANPackerSafety("vw_pq")
@@ -131,16 +134,86 @@ class TestVolkswagenPqStockSafety(TestVolkswagenPqSafetyBase):
 
 
 class TestVolkswagenPqLongSafety(TestVolkswagenPqSafetyBase, common.LongitudinalAccelSafetyTest):
-  TX_MSGS = [[MSG_HCA_1, 0], [MSG_LDW_1, 0], [MSG_ACC_SYSTEM, 0], [MSG_ACC_GRA_ANZEIGE, 0]]
-  FWD_BLACKLISTED_ADDRS = {2: [MSG_HCA_1, MSG_LDW_1, MSG_ACC_SYSTEM, MSG_ACC_GRA_ANZEIGE]}
+  TX_MSGS = [[MSG_HCA_1, 0], [MSG_LDW_1, 0], [MSG_ACC_SYSTEM, 0], [MSG_ACC_GRA_ANZEIGE, 0], [0x200, 0]]
+  FWD_BLACKLISTED_ADDRS = {2: [MSG_HCA_1, MSG_LDW_1, MSG_ACC_SYSTEM, MSG_ACC_GRA_ANZEIGE, 0x200]}
   RELAY_MALFUNCTION_ADDRS = {0: (MSG_HCA_1, MSG_LDW_1, MSG_ACC_SYSTEM, MSG_ACC_GRA_ANZEIGE)}
   INACTIVE_ACCEL = 3.01
 
   def setUp(self):
     self.packer = CANPackerSafety("vw_pq")
     self.safety = libsafety_py.libsafety
-    self.safety.set_safety_hooks(CarParams.SafetyModel.volkswagenPq, VolkswagenSafetyFlags.LONG_CONTROL)
+    self.safety.set_safety_hooks(CarParams.SafetyModel.volkswagenPq,
+                                 VolkswagenSafetyFlags.LONG_CONTROL | VolkswagenSafetyFlags.GAS_INTERCEPTOR)
     self.safety.init_tests()
+
+  def test_pedal_command_checksum_and_dbc_roundtrip(self):
+    msg = create_pedal_control(self.packer, 0, 1000, 3)
+    self.assertEqual(msg[1][5], crc8_pedal(msg[1][:5]))
+
+    parser = CANParser("vw_pq", [("GAS_COMMAND", 0)], 0)
+    parser.update([(0, [msg])])
+    self.assertEqual(1000, parser.vl["GAS_COMMAND"]["GAS_COMMAND"])
+    self.assertEqual(500, parser.vl["GAS_COMMAND"]["GAS_COMMAND2"])
+    self.assertEqual(1, parser.vl["GAS_COMMAND"]["ENABLE"])
+
+  def _pedal_msg(self, gas=0, gas2=0, enabled=False, counter=0, checksum_ok=True):
+    values = {"GAS_COMMAND": gas, "GAS_COMMAND2": gas2, "ENABLE": enabled, "COUNTER_PEDAL": counter}
+    msg = self.packer.make_can_msg("GAS_COMMAND", 0, values)
+    data = bytearray(msg[1])
+    data[5] = crc8_pedal(data[:5])
+    if not checksum_ok:
+      data[5] ^= 0xFF
+    return common.make_msg(0, 0x200, 6, data)
+
+  def _pedal_sensor_msg(self, gas=0, gas2=0, state=0, counter=0, checksum_ok=True):
+    values = {"INTERCEPTOR_GAS": gas, "INTERCEPTOR_GAS2": gas2, "STATE": state, "COUNTER_PEDAL": counter}
+    msg = self.packer.make_can_msg("GAS_SENSOR", 0, values)
+    data = bytearray(msg[1])
+    data[5] = crc8_pedal(data[:5])
+    if not checksum_ok:
+      data[5] ^= 0xFF
+    return common.make_msg(0, 0x201, 6, data)
+
+  def test_pedal_tx_requires_flag_and_valid_bounded_payload(self):
+    self.safety.set_controls_allowed(True)
+    self.assertTrue(self._tx(self._pedal_msg(1000, 500, True)))
+    self.assertFalse(self._tx(self._pedal_msg(1301, 650, True)))
+    self.assertFalse(self._tx(self._pedal_msg(1000, 499, True)))
+    self.assertFalse(self._tx(self._pedal_msg(1000, 500, True, checksum_ok=False)))
+
+    self.safety.set_controls_allowed(False)
+    self.assertFalse(self._tx(self._pedal_msg(1000, 500, True)))
+    self.assertFalse(self._tx(self._pedal_msg(0, 500, False)))
+    self.assertTrue(self._tx(self._pedal_msg()))
+
+    self.safety.set_safety_hooks(CarParams.SafetyModel.volkswagenPq, VolkswagenSafetyFlags.LONG_CONTROL)
+    self.safety.set_controls_allowed(True)
+    self.assertFalse(self._tx(self._pedal_msg(1000, 500, True)))
+
+  def test_pedal_rx_checksum_counter_and_fault_state(self):
+    self.safety.set_controls_allowed(True)
+    self.assertTrue(self._rx(self._pedal_sensor_msg(gas=500, gas2=500, counter=1)))
+    self.assertFalse(self.safety.get_longitudinal_allowed())
+
+    self._reset_safety_hooks()
+    self.safety.set_controls_allowed(True)
+    self._rx(self._pedal_sensor_msg(counter=0, checksum_ok=False))
+    self.assertFalse(self.safety.get_controls_allowed())
+
+    self._reset_safety_hooks()
+    self.safety.set_controls_allowed(True)
+    self.assertTrue(self._rx(self._pedal_sensor_msg(state=5, counter=0)))
+    self.assertFalse(self.safety.get_controls_allowed())
+
+    self._reset_safety_hooks()
+    self.safety.set_controls_allowed(True)
+    for counter in [0, 0, 0, 0, 0, 0]:
+      self._rx(self._pedal_sensor_msg(counter=counter))
+    self.assertFalse(self.safety.get_controls_allowed())
+
+  def test_pedal_rx_is_not_required_without_interceptor(self):
+    self.safety.set_safety_hooks(CarParams.SafetyModel.volkswagenPq, VolkswagenSafetyFlags.LONG_CONTROL)
+    self.assertEqual(6, self.safety.get_current_safety_rx_checks_len())
 
   # stock cruise controls are entirely bypassed under openpilot longitudinal control
   def test_disable_control_allowed_from_cruise(self):

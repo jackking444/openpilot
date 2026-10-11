@@ -34,6 +34,10 @@ bool safety_config_valid() {
   return true;
 }
 
+int get_current_safety_rx_checks_len(void) {
+  return current_safety_config.rx_checks_len;
+}
+
 void set_controls_allowed(bool c){
   controls_allowed = c;
 }

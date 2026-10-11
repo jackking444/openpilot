@@ -178,6 +178,7 @@ class WMI(StrEnum):
 
 class VolkswagenSafetyFlags(IntFlag):
   LONG_CONTROL = 1
+  GAS_INTERCEPTOR = 16
 
 
 class VolkswagenFlags(IntFlag):
@@ -375,10 +376,12 @@ class CAR(Platforms):
   )
   VOLKSWAGEN_SHARAN_MK2 = VolkswagenPQPlatformConfig(
     [
+      VWCarDocs("Volkswagen Sharan 2010, modified low-speed EPS"),
       VWCarDocs("Volkswagen Sharan 2018-22"),
       VWCarDocs("SEAT Alhambra 2018-20"),
     ],
-    VolkswagenCarSpecs(mass=1639, wheelbase=2.92, minSteerSpeed=50 * CV.KPH_TO_MS),
+      # This zero-speed EPS threshold only applies to Sharan racks flashed for low-speed HCA.
+      VolkswagenCarSpecs(mass=1774, wheelbase=2.92, minSteerSpeed=0),
     chassis_codes={"7N"},
     wmis={WMI.VOLKSWAGEN_EUROPE_CAR},
   )

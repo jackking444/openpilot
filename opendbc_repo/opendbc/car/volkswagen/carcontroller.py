@@ -95,8 +95,20 @@ class CarController(CarControllerBase):
         accel = float(np.clip(actuators.accel, self.CCP.ACCEL_MIN, self.CCP.ACCEL_MAX) if CC.longActive else 0)
         stopping = actuators.longControlState == LongCtrlState.stopping
         starting = actuators.longControlState == LongCtrlState.pid and (CS.esp_hold_confirmation or CS.out.vEgo < self.CP.vEgoStopping)
+        if self.CP.enableGasInterceptorDEPRECATED:
+          if CS.out.vEgo < self.CP.vEgoStopping and CC.longActive and (starting or CS.out.standstill):
+            accel = self.CP.stopAccel
+            stopping = True
         can_sends.extend(self.CCS.create_acc_accel_control(self.packer_pt, self.CAN.pt, CS.acc_type, CC.longActive, accel,
                                                            acc_control, stopping, starting, CS.esp_hold_confirmation))
+
+        if self.CP.enableGasInterceptorDEPRECATED:
+          pedal_command = 0.0
+          if CC.longActive and actuators.accel > 0 and CS.out.vEgo < 4:
+            pedal_scale = np.interp(CS.out.vEgo, [0.0, 3.0, 5.0], [0.9, 0.5, 0.0])
+            pedal_offset = np.interp(CS.out.vEgo, [0.0, 2.3, 5.0], [-0.2, 0.0, 0.2])
+            pedal_command = 430 + pedal_scale * (actuators.accel + pedal_offset) * (1600 - 430)
+          can_sends.append(self.CCS.create_pedal_control(self.packer_pt, self.CAN.pt, pedal_command, self.frame // 2))
 
       #if self.aeb_available:
       #  if self.frame % self.CCP.AEB_CONTROL_STEP == 0:

@@ -104,6 +104,7 @@ void set_timer(uint32_t t);
 
 void safety_tick_current_safety_config();
 bool safety_config_valid();
+int get_current_safety_rx_checks_len(void);
 
 void init_tests(void);
 
