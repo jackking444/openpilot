@@ -228,7 +228,6 @@ static void volkswagen_pq_rx_hook(const CANPacket_t *msg) {
       uint16_t gas2 = volkswagen_pedal_value(msg, 2);
       volkswagen_pq_interceptor_gas_pressed = (((uint32_t)gas1 + gas2) / 2U) > 475U;
       if ((msg->data[4] >> 4U) != 0U) {
-        volkswagen_pq_interceptor_gas_pressed = true;
         controls_allowed = false;
       }
       gas_pressed = volkswagen_pq_stock_gas_pressed || volkswagen_pq_interceptor_gas_pressed;

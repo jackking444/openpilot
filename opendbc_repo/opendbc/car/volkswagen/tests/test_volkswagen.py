@@ -5,6 +5,7 @@ import unittest
 from opendbc.car import DT_CTRL
 from opendbc.car.structs import CarParams
 from opendbc.car.volkswagen.carcontroller import HCAMitigation
+from opendbc.car.volkswagen.carstate import is_gas_interceptor_pressed
 from opendbc.car.volkswagen.values import CAR, CarControllerParams as CCP, FW_QUERY_CONFIG, WMI
 from opendbc.car.volkswagen.fingerprints import FW_VERSIONS
 
@@ -30,6 +31,11 @@ class TestVolkswagenHCAMitigation(unittest.TestCase):
         assert hca_mitigation.update(actuator_value, actuator_value) == expected_torque, f"{frame=}"
 
 class TestVolkswagenPlatformConfigs(unittest.TestCase):
+  def test_pedal_fault_state_is_not_a_gas_press(self):
+    self.assertFalse(is_gas_interceptor_pressed(431, 228))
+    self.assertFalse(is_gas_interceptor_pressed(430, 225))
+    self.assertTrue(is_gas_interceptor_pressed(500, 500))
+
   def test_spare_part_fw_pattern(self):
     # Relied on for determining if a FW is likely VW
     for platform, ecus in FW_VERSIONS.items():

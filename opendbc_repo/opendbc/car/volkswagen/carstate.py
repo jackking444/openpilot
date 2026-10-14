@@ -8,6 +8,10 @@ from opendbc.car.volkswagen.values import DBC, CanBus, NetworkLocation, Transmis
 ButtonType = structs.CarState.ButtonEvent.Type
 
 
+def is_gas_interceptor_pressed(gas1: float, gas2: float) -> bool:
+  return (gas1 + gas2) / 2 > 475
+
+
 class CarState(CarStateBase):
   def __init__(self, CP):
     super().__init__(CP)
@@ -162,7 +166,7 @@ class CarState(CarStateBase):
     # Update gas, brakes, and gearshift.
     if self.CP.enableGasInterceptorDEPRECATED:
       pedal = pt_cp.vl["GAS_SENSOR"]
-      ret.gasPressed = pedal["STATE"] != 0 or (pedal["INTERCEPTOR_GAS"] + pedal["INTERCEPTOR_GAS2"]) / 2 > 475
+      ret.gasPressed = is_gas_interceptor_pressed(pedal["INTERCEPTOR_GAS"], pedal["INTERCEPTOR_GAS2"])
     else:
       ret.gasPressed = pt_cp.vl["Motor_3"]["MO3_Pedalwert"] > 0
     ret.brake = pt_cp.vl["Bremse_5"]["BR5_Bremsdruck"] / 250.0  # FIXME: this is pressure in Bar, not sure what OP expects

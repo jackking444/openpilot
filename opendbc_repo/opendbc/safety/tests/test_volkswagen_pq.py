@@ -226,6 +226,7 @@ class TestVolkswagenPqLongSafety(TestVolkswagenPqSafetyBase, common.Longitudinal
   def test_pedal_rx_checksum_counter_and_fault_state(self):
     self.safety.set_controls_allowed(True)
     self.assertTrue(self._rx(self._pedal_sensor_msg(gas=500, gas2=500, counter=1)))
+    self.assertTrue(self.safety.get_gas_pressed_prev())
     self.assertFalse(self.safety.get_longitudinal_allowed())
 
     self._reset_safety_hooks()
@@ -237,6 +238,13 @@ class TestVolkswagenPqLongSafety(TestVolkswagenPqSafetyBase, common.Longitudinal
     self.safety.set_controls_allowed(True)
     self.assertTrue(self._rx(self._pedal_sensor_msg(state=5, counter=0)))
     self.assertFalse(self.safety.get_controls_allowed())
+    self.assertFalse(self.safety.get_gas_pressed_prev())
+
+    self._reset_safety_hooks()
+    self.safety.set_controls_allowed(True)
+    self.assertTrue(self._rx(self._pedal_sensor_msg(gas=500, gas2=500, state=5, counter=0)))
+    self.assertFalse(self.safety.get_controls_allowed())
+    self.assertTrue(self.safety.get_gas_pressed_prev())
 
     self._reset_safety_hooks()
     self.safety.set_controls_allowed(True)
