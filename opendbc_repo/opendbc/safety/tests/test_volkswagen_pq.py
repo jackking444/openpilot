@@ -236,14 +236,16 @@ class TestVolkswagenPqLongSafety(TestVolkswagenPqSafetyBase, common.Longitudinal
 
     self._reset_safety_hooks()
     self.safety.set_controls_allowed(True)
-    self.assertTrue(self._rx(self._pedal_sensor_msg(state=5, counter=0)))
-    self.assertFalse(self.safety.get_controls_allowed())
+    # Match the logged idle pedal values with FAULT_TIMEOUT: status alone must
+    # neither mark the gas as pressed nor disallow controls.
+    self.assertTrue(self._rx(self._pedal_sensor_msg(gas=430, gas2=225, state=5, counter=0)))
+    self.assertTrue(self.safety.get_controls_allowed())
     self.assertFalse(self.safety.get_gas_pressed_prev())
 
     self._reset_safety_hooks()
     self.safety.set_controls_allowed(True)
     self.assertTrue(self._rx(self._pedal_sensor_msg(gas=500, gas2=500, state=5, counter=0)))
-    self.assertFalse(self.safety.get_controls_allowed())
+    self.assertTrue(self.safety.get_controls_allowed())
     self.assertTrue(self.safety.get_gas_pressed_prev())
 
     self._reset_safety_hooks()
