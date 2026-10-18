@@ -254,6 +254,49 @@ class TestVolkswagenPqLongSafety(TestVolkswagenPqSafetyBase, common.Longitudinal
       self._rx(self._pedal_sensor_msg(counter=counter))
     self.assertFalse(self.safety.get_controls_allowed())
 
+  def test_interceptor_gas_sensor_is_driver_gas_source(self):
+    self._prime_pedal_inputs()
+    self.safety.set_controls_allowed(True)
+
+    # Motor_3 reflects ECU throttle and can include throttle produced by the
+    # interceptor itself. It must not be treated as driver input in this mode.
+    self._rx(self._user_gas_msg(100))
+    self.assertFalse(self.safety.get_gas_pressed_prev())
+    self.assertTrue(self.safety.get_longitudinal_allowed())
+    self.assertTrue(self._tx(self._pedal_msg(1000, 500, True)))
+
+    # Match OP's floating-point average comparison at the 475 boundary.
+    self._rx(self._pedal_sensor_msg(gas=475, gas2=475, counter=2))
+    self.assertFalse(self.safety.get_gas_pressed_prev())
+    self._rx(self._pedal_sensor_msg(gas=476, gas2=475, counter=3))
+    self.assertTrue(self.safety.get_gas_pressed_prev())
+    self.assertFalse(self.safety.get_longitudinal_allowed())
+
+  def test_stock_gas_remains_source_without_interceptor(self):
+    self.safety.set_safety_hooks(CarParams.SafetyModel.volkswagenPq, VolkswagenSafetyFlags.LONG_CONTROL)
+    self.safety.init_tests()
+    self.safety.set_controls_allowed(True)
+
+    self._rx(self._user_gas_msg(100))
+    self.assertTrue(self.safety.get_gas_pressed_prev())
+    self.assertFalse(self.safety.get_longitudinal_allowed())
+
+  def test_prev_gas(self):
+    self.assertFalse(self.safety.get_gas_pressed_prev())
+    self._rx(self._pedal_sensor_msg(gas=500, gas2=500, counter=1))
+    self.assertTrue(self.safety.get_gas_pressed_prev())
+    self._rx(self._pedal_sensor_msg(counter=2))
+    self.assertFalse(self.safety.get_gas_pressed_prev())
+
+  def test_no_disengage_on_gas(self):
+    self._rx(self._pedal_sensor_msg(counter=1))
+    self.safety.set_controls_allowed(True)
+    self._rx(self._pedal_sensor_msg(gas=500, gas2=500, counter=2))
+    self.assertTrue(self.safety.get_controls_allowed())
+    self.assertFalse(self.safety.get_longitudinal_allowed())
+    self._rx(self._pedal_sensor_msg(counter=3))
+    self.assertTrue(self.safety.get_longitudinal_allowed())
+
   def test_pedal_rx_is_not_required_without_interceptor(self):
     self.safety.set_safety_hooks(CarParams.SafetyModel.volkswagenPq, VolkswagenSafetyFlags.LONG_CONTROL)
     self.assertEqual(6, self.safety.get_current_safety_rx_checks_len())

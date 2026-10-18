@@ -226,14 +226,14 @@ static void volkswagen_pq_rx_hook(const CANPacket_t *msg) {
       volkswagen_pq_pedal_rx_seen = true;
       uint16_t gas1 = volkswagen_pedal_value(msg, 0);
       uint16_t gas2 = volkswagen_pedal_value(msg, 2);
-      volkswagen_pq_interceptor_gas_pressed = (((uint32_t)gas1 + gas2) / 2U) > 475U;
-      gas_pressed = volkswagen_pq_stock_gas_pressed || volkswagen_pq_interceptor_gas_pressed;
+      volkswagen_pq_interceptor_gas_pressed = ((uint32_t)gas1 + gas2) > 950U;
+      gas_pressed = volkswagen_pq_interceptor_gas_pressed;
     }
 
     // Signal: Motor_3.MO3_Pedalwert
     if (msg->addr == MSG_MOTOR_3) {
-      volkswagen_pq_stock_gas_pressed = (msg->data[2] != 0U);
-      gas_pressed = volkswagen_pq_stock_gas_pressed || volkswagen_pq_interceptor_gas_pressed;
+      volkswagen_pq_stock_gas_pressed = !enable_gas_interceptor && (msg->data[2] != 0U);
+      gas_pressed = enable_gas_interceptor ? volkswagen_pq_interceptor_gas_pressed : volkswagen_pq_stock_gas_pressed;
     }
 
     // Signal: Motor_2.MO2_BLS
